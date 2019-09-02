@@ -55,7 +55,7 @@
   (TopLevelForm
    (tl)
    gtl
-   (#%expression s e)
+   (tl:#%expression s e)
    (tl:module s0 s1 id d ml* ...)
    (tl:begin s tl* ...)
    (tl:begin-for-syntax s tl* ...)
@@ -173,7 +173,7 @@
     (TopLevelForm
      : TopLevelForm (prog phase) -> * (ss)
      [,gtl (GeneralTopLevelForm gtl phase)]
-     [(#%expression ,s ,[e])
+     [(tl:#%expression ,s ,[e])
       (datum->syntax s `(,(lit #%expression) ,e))]
      [(tl:module ,s0 ,s1 ,id ,d ,[ml* 0 -> ml*] ...)
       (datum->syntax
@@ -204,7 +204,7 @@
     (with-output-language (FullyExpandedProgram TopLevelForm)
       (kernel-syntax-case/phase
        stx phase
-       [(#%expression e) `(#%expression ,stx ,((expr 0) #'e))]
+       [(#%expression e) `(tl:#%expression ,stx ,((expr 0) #'e))]
        [(module id module-path p)
         (kernel-syntax-case/phase
          #'p 0
