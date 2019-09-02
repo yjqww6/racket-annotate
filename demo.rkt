@@ -1,5 +1,5 @@
 #lang racket/base
-(require (for-syntax "fpe.rkt" racket/base nanopass/base syntax/stx syntax/name)
+(require (for-syntax "fully-expanded-program.rkt" racket/base nanopass/base syntax/stx syntax/name)
          (prefix-in p: (only-in racket/base #%module-begin)))
 
 (provide (all-from-out racket/base) #%module-begin)
@@ -16,10 +16,10 @@
     #`(#%plain-app
        displayln
        #,a))
-  (define-pass trace : (FullyExpandedProgram ModuleLevelForm) (fpe) ->
+  (define-pass trace : (FullyExpandedProgram ModuleLevelForm) (prog) ->
     (FullyExpandedProgram ModuleLevelForm) ()
     (Expr
-     : Expr (fpe) -> Expr ()
+     : Expr (prog) -> Expr ()
      [(#%plain-lambda ,s ,fml ,[body*] ... ,[body])
       (cond
         [(syntax-local-infer-name s #f)
@@ -51,20 +51,20 @@
         [else
          `(case-lambda ,s [,fml ,body* ... ,body] ...)])])
     (GeneralTopLevelForm
-     : GeneralTopLevelForm (fpe) -> GeneralTopLevelForm ()
+     : GeneralTopLevelForm (prog) -> GeneralTopLevelForm ()
      [(define-syntaxes ,s (,x* ...) ,e)
       `(define-syntaxes ,s (,x* ...) ,e)])
-    (SubModuleForm : SubModuleForm (fpe) -> SubModuleForm ())
+    (SubModuleForm : SubModuleForm (prog) -> SubModuleForm ())
     (ModuleLevelForm
-     : ModuleLevelForm (fpe) -> ModuleLevelForm ()
+     : ModuleLevelForm (prog) -> ModuleLevelForm ()
      [(begin-for-syntax ,s ,ml* ...)
       `(begin-for-syntax ,s ,ml* ...)])
     (TopLevelForm
-     : TopLevelForm (fpe) -> TopLevelForm ()
+     : TopLevelForm (prog) -> TopLevelForm ()
      [(tl:begin-for-syntax ,s ,tl* ...)
       `(tl:begin-for-syntax ,s ,tl* ...)])
 
-    (ModuleLevelForm fpe))
+    (ModuleLevelForm prog))
   )
 
 (define-syntax (#%module-begin stx)
@@ -73,12 +73,12 @@
      (begin
        (define expanded
          (local-expand #'(p:#%module-begin form ...) 'module-begin '()))
-       (define fpe
+       (define prog
          (syntax-case expanded ()
            [(_ form ...)
             (stx-map (λ (s) (syntax->FullyExpandedProgram s 'module-level-form))
                      #'(form ...))]))
-       (define transed (map trace fpe))
+       (define transed (map trace prog))
        (define ret
          #`(#%plain-module-begin
             #,@(map (λ (s) (FullyExpandedProgram->syntax s 'module-level-form -1))

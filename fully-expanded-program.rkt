@@ -63,10 +63,10 @@
   )
 
 ;;;TODO: rearm 
-(define (FullyExpandedProgram->syntax fpe [start 'top-level-form]
+(define (FullyExpandedProgram->syntax prog [start 'top-level-form]
                                       [shift-literal -1])
   (define-pass FullyExpandedProgram->syntax
-    : FullyExpandedProgram (fpe start) -> * (ss)
+    : FullyExpandedProgram (prog start) -> * (ss)
     (definitions
       (define-syntax (lit stx)
         (syntax-case stx ()
@@ -75,7 +75,7 @@
               #'id
               (+ shift-literal #,(datum->syntax stx 'phase)))])))
     (Expr
-     : Expr (fpe phase) -> * (ss)
+     : Expr (prog phase) -> * (ss)
      [,x x]
      [(#%expression ,s ,[e])
       (datum->syntax s `(,(lit #%expression) ,e))]
@@ -131,7 +131,7 @@
       (datum->syntax s `(,(lit #%variable-reference)))])
       
     (GeneralTopLevelForm
-     : GeneralTopLevelForm (fpe phase) -> * (ss)
+     : GeneralTopLevelForm (prog phase) -> * (ss)
      [,e (Expr e phase)]
      [(define-values ,s (,x* ...) ,[e])
       (datum->syntax s `(,(lit define-values) ,x* ,e))]
@@ -141,7 +141,7 @@
       (datum->syntax s `(,(lit #%require) . ,d))])
 
     (SubModuleForm
-     : SubModuleForm (fpe phase) -> * (ss)
+     : SubModuleForm (prog phase) -> * (ss)
      [(module ,s0 ,s1 ,id ,d ,[ml* 0 -> ml*] ...)
       (datum->syntax
        s0
@@ -160,7 +160,7 @@
                             ,@ml*))))])
   
     (ModuleLevelForm
-     : ModuleLevelForm (fpe phase) -> * (ss)
+     : ModuleLevelForm (prog phase) -> * (ss)
      [,gtl (GeneralTopLevelForm gtl phase)]
      [(#%provide ,s ,d)
       (datum->syntax s `(,(lit #%provide) . ,d))]
@@ -171,7 +171,7 @@
       (datum->syntax s `(,(lit #%declare) . ,d))])
   
     (TopLevelForm
-     : TopLevelForm (fpe phase) -> * (ss)
+     : TopLevelForm (prog phase) -> * (ss)
      [,gtl (GeneralTopLevelForm gtl phase)]
      [(#%expression ,s ,[e])
       (datum->syntax s `(,(lit #%expression) ,e))]
@@ -190,13 +190,13 @@
      )
     (case start
       [(top-level-form)
-       (TopLevelForm fpe 0)]
+       (TopLevelForm prog 0)]
       [(module-level-form)
-       (ModuleLevelForm fpe 0)]
+       (ModuleLevelForm prog 0)]
       [(expr)
-       (Expr fpe 0)])
+       (Expr prog 0)])
     )
-  (FullyExpandedProgram->syntax fpe start))
+  (FullyExpandedProgram->syntax prog start))
 
 (define (syntax->FullyExpandedProgram stx [start 'top-level-form] [phase 0])
   
