@@ -1,6 +1,6 @@
 #lang racket/base
-(require (for-syntax "main.rkt" racket/base nanopass/base
-                     syntax/name))
+(require "../main.rkt"
+         (for-syntax racket/base nanopass/base syntax/name))
 
 (provide (except-out (all-from-out racket/base) #%module-begin))
 
