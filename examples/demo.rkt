@@ -36,8 +36,6 @@
      [(define-syntaxes ,s (,x* ...) ,e)
       `(define-syntaxes ,s (,x* ...) ,e)])
     
-    (SubModuleForm : SubModuleForm (prog) -> SubModuleForm ())
-    
     (ModuleLevelForm
      : ModuleLevelForm (prog) -> ModuleLevelForm ()
      [(begin-for-syntax ,s ,ml* ...)

@@ -40,10 +40,14 @@
    (define-syntaxes s (x* ...) e)
    (#%require s d))
 
+  (ModuleBeginForm
+   (mbf)
+   (#%plain-module-begin s ml* ...))
+
   (SubModuleForm
    (sm)
-   (module s0 s1 id d ml* ...)
-   (module* s0 s1 id d ml* ...))
+   (module s id d mbf)
+   (module* s id d mbf))
   
   (ModuleLevelForm
    (ml)
@@ -57,7 +61,7 @@
    (tl)
    gtl
    (tl:#%expression s e)
-   (tl:module s0 s1 id d ml* ...)
+   (tl:module s id d mbf)
    (tl:begin s tl* ...)
    (tl:begin-for-syntax s tl* ...)
    )
@@ -150,24 +154,18 @@
      [(#%require ,s ,d)
       (d->s s `(,(lit #%require) . ,d))])
 
+    (ModuleBeginForm
+     : ModuleBeginForm (prog phase) -> * (ss)
+     [(#%plain-module-begin ,s ,[ml*] ...)
+      (let ([phase 0])
+        (d->s s `(,(lit #%plain-module-begin) . ,ml*)))])
+
     (SubModuleForm
      : SubModuleForm (prog phase) -> * (ss)
-     [(module ,s0 ,s1 ,id ,d ,[ml* 0 -> ml*] ...)
-      (d->s
-       s0
-       `(,(lit module) ,id ,d
-                       ,(d->s
-                         s1
-                         `(,(let ([phase 0]) (lit #%plain-module-begin))
-                           ,@ml*))))]
-     [(module* ,s0 ,s1 ,id ,d ,[ml* 0 -> ml*] ...)
-      (d->s
-       s0
-       `(,(lit module*) ,id ,d
-                        ,(d->s
-                          s1
-                          `(,(let ([phase 0]) (lit #%plain-module-begin))
-                            ,@ml*))))])
+     [(module ,s ,id ,d ,[mbf])
+      (d->s s `(,(lit module) ,id ,d ,mbf))]
+     [(module* ,s ,id ,d ,[mbf])
+      (d->s s `(,(lit module*) ,id ,d ,mbf))])
   
     (ModuleLevelForm
      : ModuleLevelForm (prog phase) -> * (ss)
@@ -185,14 +183,8 @@
      [,gtl (GeneralTopLevelForm gtl phase)]
      [(tl:#%expression ,s ,[e])
       (d->s s `(,(lit #%expression) ,e))]
-     [(tl:module ,s0 ,s1 ,id ,d ,[ml* 0 -> ml*] ...)
-      (d->s
-       s0
-       `(,(lit module) ,id ,d
-                       ,(d->s
-                         s1
-                         `(,(lit #%plain-module-begin)
-                           ,@ml*))))]
+     [(tl:module ,s ,id ,d ,[mbf])
+      (d->s s `(,(lit module) ,id ,d ,mbf))]
      [(tl:begin ,s ,[tl*] ...)
       (d->s s `(,(lit begin) ,@tl*))]
      [(tl:begin-for-syntax ,s ,[tl* (+ 1 phase) -> tl*] ...)
@@ -229,11 +221,7 @@
        (syntax-disarm stx #f) phase
        [(#%expression e) `(tl:#%expression ,stx ,(expr #'e))]
        [(module id module-path p)
-        (kernel-syntax-case/phase
-         #'p 0
-         [(#%plain-module-begin ml ...)
-          `(tl:module ,stx ,#'p ,#'id ,#'module-path
-                      ,(phase-map module-level-form 0 #'(ml ...)) ...)])]
+        `(tl:module ,stx ,#'id ,#'module-path ,(module-begin-form #'p))]
        [(begin tl ...)
         `(tl:begin ,stx
                    ,(stx-map top-level-form #'(tl ...)) ...)]
@@ -242,6 +230,16 @@
                    ,(phase-map top-level-form (+ 1 phase) #'(tl ...))
                    ...)]
        [_ (general-top-level-form stx)])))
+
+  (define-implicit (module-begin-form stx) (phase)
+    (with-output-language (FullyExpandedProgram ModuleBeginForm)
+      (with-implicit ([phase 0])
+        (kernel-syntax-case/phase
+         (syntax-disarm stx #f) 0
+         [(#%plain-module-begin ml ...)
+          `(#%plain-module-begin
+            ,stx
+            ,(stx-map module-level-form #'(ml ...)) ...)]))))
 
   (define-implicit (module-level-form stx) (phase)
     (with-output-language (FullyExpandedProgram ModuleLevelForm)
@@ -260,19 +258,11 @@
           (kernel-syntax-case/phase
            stx phase
            [(module id module-path p)
-            (kernel-syntax-case/phase
-             (syntax-disarm #'p #f) 0
-             [(#%plain-module-begin ml ...)
-              `(module ,stx ,#'p ,#'id ,#'module-path
-                 ,(phase-map module-level-form 0 #'(ml ...))
-                 ...)])]
+            `(module ,stx ,#'id ,#'module-path
+               ,(module-begin-form #'p))]
            [(module* id module-path p)
-            (kernel-syntax-case/phase
-             (syntax-disarm #'p #f) 0
-             [(#%plain-module-begin ml ...)
-              `(module* ,stx ,#'p ,#'id ,#'module-path
-                 ,(phase-map module-level-form 0 #'(ml ...))
-                 ...)])]
+            `(module* ,stx ,#'id ,#'module-path
+               ,(module-begin-form #'p))]
            [_ (general-top-level-form stx)]))])))
 
   (define-implicit (general-top-level-form stx) (phase)
