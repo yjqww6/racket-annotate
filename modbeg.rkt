@@ -18,7 +18,7 @@
            (define transed (map pass prog))
            (define ret
              #`(#%plain-module-begin
-                #,@(map (λ (s) (FullyExpandedProgram->syntax s 'module-level-form -1))
+                #,@(map (λ (s) (FullyExpandedProgram->syntax s 'module-level-form))
                         transed)))
            ret)]))
     (provide (rename-out [my-module-begin #%module-begin]))))

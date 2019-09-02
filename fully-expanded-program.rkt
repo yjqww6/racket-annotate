@@ -1,5 +1,5 @@
 #lang racket/base
-(require (for-syntax racket/base)
+(require (for-syntax racket/base) (for-template racket/base)
          nanopass/base
          syntax/kerncase syntax/stx)
 
@@ -63,7 +63,7 @@
   )
 
 (define (FullyExpandedProgram->syntax prog [start 'top-level-form]
-                                      [shift-literal -1])
+                                      [base-phase (syntax-local-phase-level)])
   (define-pass FullyExpandedProgram->syntax
     : FullyExpandedProgram (prog start) -> * (ss)
     (definitions
@@ -76,7 +76,7 @@
           [(_ id)
            #`(syntax-shift-phase-level
               #'id
-              (+ shift-literal #,(datum->syntax stx 'phase)))])))
+              (+ #,(datum->syntax stx 'phase) base-phase))])))
     (Expr
      : Expr (prog phase) -> * (ss)
      [,x x]
