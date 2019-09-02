@@ -71,7 +71,7 @@
   (FullyExpandedProgram->syntax
    prog [start 'top-level-form] [base-phase (syntax-local-phase-level)])
   (->* (FullyExpandedProgram?)
-       ((or/c 'top-level-form 'module-level-form 'expr)
+       ((or/c 'top-level-form 'module-level-form 'expr 'module-begin-form)
         exact-integer?)
        syntax?)
   
@@ -196,7 +196,9 @@
       [(module-level-form)
        (ModuleLevelForm prog base-phase)]
       [(expr)
-       (Expr prog base-phase)])
+       (Expr prog base-phase)]
+      [(module-begin-form)
+       (ModuleBeginForm prog base-phase)])
     )
   (fep->stx prog start))
 
@@ -204,7 +206,7 @@
   (syntax->FullyExpandedProgram
    stx [start 'top-level-form] [base-phase (syntax-local-phase-level)])
   (->* (syntax?)
-       ((or/c 'top-level-form 'module-level-form 'expr)
+       ((or/c 'top-level-form 'module-level-form 'expr 'module-begin-form)
         exact-integer?)
        FullyExpandedProgram?)
   
@@ -233,13 +235,12 @@
 
   (define-implicit (module-begin-form stx) (phase)
     (with-output-language (FullyExpandedProgram ModuleBeginForm)
-      (with-implicit ([phase 0])
-        (kernel-syntax-case/phase
-         (syntax-disarm stx #f) 0
-         [(#%plain-module-begin ml ...)
-          `(#%plain-module-begin
-            ,stx
-            ,(stx-map module-level-form #'(ml ...)) ...)]))))
+      (kernel-syntax-case/phase
+       (syntax-disarm stx #f) 0
+       [(#%plain-module-begin ml ...)
+        `(#%plain-module-begin
+          ,stx
+          ,(phase-map module-level-form 0 #'(ml ...)) ...)])))
 
   (define-implicit (module-level-form stx) (phase)
     (with-output-language (FullyExpandedProgram ModuleLevelForm)
@@ -349,4 +350,6 @@
       [(module-level-form)
        (module-level-form stx)]
       [(expr)
-       (expr stx)])))
+       (expr stx)]
+      [(module-begin-form)
+       (module-begin-form stx)])))
