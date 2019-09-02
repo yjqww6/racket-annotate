@@ -83,7 +83,7 @@
           [(_ id)
            #`(syntax-shift-phase-level
               #'id
-              (+ #,(datum->syntax stx 'phase) base-phase))])))
+              #,(datum->syntax stx 'phase))])))
     (Expr
      : Expr (prog phase) -> * (ss)
      [,x x]
@@ -200,11 +200,11 @@
      )
     (case start
       [(top-level-form)
-       (TopLevelForm prog 0)]
+       (TopLevelForm prog base-phase)]
       [(module-level-form)
-       (ModuleLevelForm prog 0)]
+       (ModuleLevelForm prog base-phase)]
       [(expr)
-       (Expr prog 0)])
+       (Expr prog base-phase)])
     )
   (fep->stx prog start))
 
