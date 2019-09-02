@@ -1,8 +1,9 @@
 #lang racket/base
-(require (for-syntax "fully-expanded-program.rkt" racket/base nanopass/base syntax/stx syntax/name)
-         (prefix-in p: (only-in racket/base #%module-begin)))
+(require (for-syntax "fully-expanded-program.rkt" racket/base nanopass/base
+                     syntax/name)
+         "modbeg.rkt")
 
-(provide (all-from-out racket/base) #%module-begin)
+(provide (except-out (all-from-out racket/base) #%module-begin))
 
 (begin-for-syntax
   (define (build-trace name fmls)
@@ -10,7 +11,7 @@
       (syntax-case fmls ()
         [(a ... . b)
          (identifier? #'b)
-         #`(#%plain-app list* '#,name (~@ 'a a) ... 'b b)]
+         #`(#%plain-app list '#,name (~@ 'a a) ... 'b b)]
         [(a ...)
          #`(#%plain-app list '#,name (~@ 'a a) ...)]))
     #`(#%plain-app
@@ -59,28 +60,8 @@
      : ModuleLevelForm (prog) -> ModuleLevelForm ()
      [(begin-for-syntax ,s ,ml* ...)
       `(begin-for-syntax ,s ,ml* ...)])
-    (TopLevelForm
-     : TopLevelForm (prog) -> TopLevelForm ()
-     [(tl:begin-for-syntax ,s ,tl* ...)
-      `(tl:begin-for-syntax ,s ,tl* ...)])
 
     (ModuleLevelForm prog))
   )
 
-(define-syntax (#%module-begin stx)
-  (syntax-case stx ()
-    [(_ form ...)
-     (begin
-       (define expanded
-         (local-expand #'(p:#%module-begin form ...) 'module-begin '()))
-       (define prog
-         (syntax-case expanded ()
-           [(_ form ...)
-            (stx-map (λ (s) (syntax->FullyExpandedProgram s 'module-level-form))
-                     #'(form ...))]))
-       (define transed (map trace prog))
-       (define ret
-         #`(#%plain-module-begin
-            #,@(map (λ (s) (FullyExpandedProgram->syntax s 'module-level-form -1))
-                    transed)))
-       ret)]))
+(define/provide-module-begin trace)
