@@ -1,5 +1,5 @@
 #lang racket/base
-(require (for-syntax "../main.rkt" racket/base nanopass/base
+(require (for-syntax "main.rkt" racket/base nanopass/base
                      syntax/name))
 
 (provide (except-out (all-from-out racket/base) #%module-begin))
@@ -29,20 +29,7 @@
            (define tr (build-trace name fml))
            `(#%plain-lambda ,s ,fml ,(cons tr body*) ... ,body))]
         [else
-         `(#%plain-lambda ,s ,fml ,body* ... ,body)])]
-     [(case-lambda ,s [,fml ,[body*] ... ,[body]] ...)
-      (cond
-        [(syntax-local-infer-name s #f)
-         =>
-         (λ (name)
-           (let ([body*
-                  (for/list ([fml (in-list fml)]
-                             [body* (in-list body*)])
-                    (define tr (build-trace name fml))
-                    (cons tr body*))])
-             `(case-lambda ,s [,fml ,body* ... ,body] ...)))]
-        [else
-         `(case-lambda ,s [,fml ,body* ... ,body] ...)])])
+         `(#%plain-lambda ,s ,fml ,body* ... ,body)])])
     
     (GeneralTopLevelForm
      : GeneralTopLevelForm (prog) -> GeneralTopLevelForm ()
