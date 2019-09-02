@@ -251,7 +251,8 @@
        [(begin-for-syntax f ...)
         `(begin-for-syntax
            ,stx
-           ,(phase-map module-level-form (+ 1 phase) #'(f ...)))]
+           ,(phase-map module-level-form (+ 1 phase) #'(f ...))
+           ...)]
        [(#%declare kw ...)
         `(#%declare ,stx ,#'(kw ...))]
        [_
