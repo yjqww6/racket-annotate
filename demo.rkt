@@ -81,6 +81,6 @@
        (define transed (map trace fpe))
        (define ret
          #`(#%plain-module-begin
-            #,@(map (λ (s) (FullyExpandedProgram->syntax s 'module-level-form))
+            #,@(map (λ (s) (FullyExpandedProgram->syntax s 'module-level-form -1))
                     transed)))
        ret)]))

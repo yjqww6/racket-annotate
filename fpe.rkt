@@ -63,16 +63,17 @@
   )
 
 ;;;TODO: rearm 
-(define (FullyExpandedProgram->syntax fpe [start 'top-level-form] [phase 0])
+(define (FullyExpandedProgram->syntax fpe [start 'top-level-form]
+                                      [shift-literal -1])
   (define-pass FullyExpandedProgram->syntax
-    : FullyExpandedProgram (fpe start phase) -> * (ss)
+    : FullyExpandedProgram (fpe start) -> * (ss)
     (definitions
       (define-syntax (lit stx)
         (syntax-case stx ()
           [(_ id)
            #`(syntax-shift-phase-level
               #'id
-              (- #,(datum->syntax stx 'phase) 1))])))
+              (+ shift-literal #,(datum->syntax stx 'phase)))])))
     (Expr
      : Expr (fpe phase) -> * (ss)
      [,x x]
@@ -180,7 +181,7 @@
        `(,(lit module) ,id ,d
                        ,(datum->syntax
                          s1
-                         `(,#'#%plain-module-begin
+                         `(,(lit #%plain-module-begin)
                            ,@ml*))))]
      [(tl:begin ,s ,[tl*] ...)
       (datum->syntax s `(,(lit begin) ,@tl*))]
@@ -189,13 +190,13 @@
      )
     (case start
       [(top-level-form)
-       (TopLevelForm fpe phase)]
+       (TopLevelForm fpe 0)]
       [(module-level-form)
-       (ModuleLevelForm fpe phase)]
+       (ModuleLevelForm fpe 0)]
       [(expr)
-       (Expr fpe phase)])
+       (Expr fpe 0)])
     )
-  (FullyExpandedProgram->syntax fpe start phase))
+  (FullyExpandedProgram->syntax fpe start))
 
 (define (syntax->FullyExpandedProgram stx [start 'top-level-form] [phase 0])
   
