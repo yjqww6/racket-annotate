@@ -1,7 +1,8 @@
 #lang racket/base
 (require (for-syntax racket/base) (for-template racket/base)
-         nanopass/base
-         syntax/kerncase syntax/stx)
+         nanopass/base "implicit.rkt"
+         syntax/kerncase syntax/stx racket/contract/base
+         racket/contract/region)
 
 (provide (all-defined-out))
 
@@ -62,9 +63,15 @@
    )
   )
 
-(define (FullyExpandedProgram->syntax prog [start 'top-level-form]
-                                      [base-phase (syntax-local-phase-level)])
-  (define-pass FullyExpandedProgram->syntax
+(define/contract
+  (FullyExpandedProgram->syntax
+   prog [start 'top-level-form] [base-phase (syntax-local-phase-level)])
+  (->* (FullyExpandedProgram?)
+       ((or/c 'top-level-form 'module-level-form 'expr)
+        exact-integer?)
+       syntax?)
+  
+  (define-pass fep->stx
     : FullyExpandedProgram (prog start) -> * (ss)
     (definitions
       (define (d->s k s)
@@ -129,7 +136,7 @@
       (d->s s `(,(lit #%variable-reference) ,x))]
      [(#%variable-reference-top ,s ,x)
       (d->s s `(,(lit #%variable-reference)
-                         (,(lit #%top) ,x)))]
+                (,(lit #%top) ,x)))]
      [(#%variable-reference-null ,s)
       (d->s s `(,(lit #%variable-reference)))])
       
@@ -199,32 +206,44 @@
       [(expr)
        (Expr prog 0)])
     )
-  (FullyExpandedProgram->syntax prog start))
+  (fep->stx prog start))
 
-(define (syntax->FullyExpandedProgram stx [start 'top-level-form] [phase 0])
+(define/contract
+  (syntax->FullyExpandedProgram
+   stx [start 'top-level-form] [base-phase (syntax-local-phase-level)])
+  (->* (syntax?)
+       ((or/c 'top-level-form 'module-level-form 'expr)
+        exact-integer?)
+       FullyExpandedProgram?)
   
-  (define ((top-level-form phase) stx)
+  (define-implicit-key phase)
+
+  (define-syntax-rule (phase-map proc new-phase arg)
+    (stx-map (with-implicit ([phase new-phase])
+               proc)
+             arg))
+  
+  (define-implicit (top-level-form stx) (phase)
     (with-output-language (FullyExpandedProgram TopLevelForm)
       (kernel-syntax-case/phase
        (syntax-disarm stx #f) phase
-       [(#%expression e) `(tl:#%expression ,stx ,((expr 0) #'e))]
+       [(#%expression e) `(tl:#%expression ,stx ,(expr #'e))]
        [(module id module-path p)
         (kernel-syntax-case/phase
          #'p 0
          [(#%plain-module-begin ml ...)
           `(tl:module ,stx ,#'p ,#'id ,#'module-path
-                      ,(stx-map (module-level-form 0)
-                                #'(ml ...)) ...)])]
+                      ,(phase-map module-level-form 0 #'(ml ...)) ...)])]
        [(begin tl ...)
         `(tl:begin ,stx
-                   ,(stx-map (top-level-form phase) #'(tl ...)) ...)]
+                   ,(stx-map top-level-form #'(tl ...)) ...)]
        [(begin-for-syntax tl ...)
         `(tl:begin ,stx
-                   ,(stx-map (top-level-form (+ 1 phase))
-                             #'(tl ...)) ...)]
-       [_ ((general-top-level-form phase) stx)])))
+                   ,(phase-map top-level-form (+ 1 phase) #'(tl ...))
+                   ...)]
+       [_ (general-top-level-form stx)])))
 
-  (define ((module-level-form phase) stx)
+  (define-implicit (module-level-form stx) (phase)
     (with-output-language (FullyExpandedProgram ModuleLevelForm)
       (kernel-syntax-case/phase
        (syntax-disarm stx #f) phase
@@ -233,7 +252,7 @@
        [(begin-for-syntax f ...)
         `(begin-for-syntax
            ,stx
-           ,(stx-map (module-level-form (+ 1 phase)) #'(f ...)))]
+           ,(phase-map module-level-form (+ 1 phase) #'(f ...)))]
        [(#%declare kw ...)
         `(#%declare ,stx ,#'(kw ...))]
        [_
@@ -245,74 +264,74 @@
              (syntax-disarm #'p #f) 0
              [(#%plain-module-begin ml ...)
               `(module ,stx ,#'p ,#'id ,#'module-path
-                 ,(stx-map (module-level-form 0)
-                           #'(ml ...)) ...)])]
+                 ,(phase-map module-level-form 0 #'(ml ...))
+                 ...)])]
            [(module* id module-path p)
             (kernel-syntax-case/phase
              (syntax-disarm #'p #f) 0
              [(#%plain-module-begin ml ...)
               `(module* ,stx ,#'p ,#'id ,#'module-path
-                 ,(stx-map (module-level-form 0)
-                           #'(ml ...)) ...)])]
-           [_ ((general-top-level-form phase) stx)]))])))
+                 ,(phase-map module-level-form 0 #'(ml ...))
+                 ...)])]
+           [_ (general-top-level-form stx)]))])))
 
-  (define ((general-top-level-form phase) stx)
+  (define-implicit (general-top-level-form stx) (phase)
     (with-output-language (FullyExpandedProgram GeneralTopLevelForm)
       (kernel-syntax-case/phase
        (syntax-disarm stx #f) phase
        [(define-values (id ...) e)
         `(define-values ,stx (,(syntax->list #'(id ...)) ...)
-           ,((expr phase) #'e))]
+           ,(expr #'e))]
        [(define-syntaxes (id ...) e)
         `(define-syntaxes ,stx (,(syntax->list #'(id ...)) ...)
-           ,((expr (+ 1 phase)) #'e))]
+           ,(expr #'e #:phase (+ 1 phase)))]
        [(#%require raw-require-spec ...)
         `(#%require ,stx ,#'(raw-require-spec ...))]
-       [_ ((expr phase) stx)])))
+       [_ (expr stx)])))
 
-  (define ((expr phase) stx)
+  (define-implicit (expr stx) (phase)
     (with-output-language (FullyExpandedProgram Expr)
       (kernel-syntax-case/phase
        (syntax-disarm stx #f) phase
        [x (identifier? #'x) #'x]
        [(#%expression e)
-        `(#%expression ,stx ,((expr phase) #'e))]
+        `(#%expression ,stx ,(expr #'e))]
        [(#%plain-lambda fmls e^ ... e)
         `(#%plain-lambda ,stx ,#'fmls
-                         ,(stx-map (expr phase) #'(e^ ...)) ...
-                         ,((expr phase) #'e))]
+                         ,(stx-map expr #'(e^ ...)) ...
+                         ,(expr #'e))]
        [(case-lambda (fmls e^ ... e) ...)
         `(case-lambda ,stx
                       [,(syntax->list #'(fmls ...))
-                       ,(stx-map (λ (b) (stx-map (expr phase) b))
+                       ,(stx-map (λ (b) (stx-map expr b))
                                  #'((e^ ...) ...))
                        ...
-                       ,(stx-map (expr phase) #'(e ...))]
+                       ,(stx-map expr #'(e ...))]
                       ...)]
        [(if e0 e1 e2)
-        `(if ,stx ,((expr phase) #'e0)
-             ,((expr phase) #'e1)
-             ,((expr phase) #'e2))]
+        `(if ,stx ,(expr #'e0)
+             ,(expr #'e1)
+             ,(expr #'e2))]
        [(begin e^ ... e)
-        `(begin ,stx ,(stx-map (expr phase) #'(e^ ...)) ...
-                ,((expr phase) #'e))]
+        `(begin ,stx ,(stx-map expr #'(e^ ...)) ...
+                ,(expr #'e))]
        [(begin0 e e^ ...)
-        `(begin0 ,stx ,((expr phase) #'e)
-                 ,(stx-map (expr phase) #'(e^ ...)) ...)]
+        `(begin0 ,stx ,(expr #'e)
+                 ,(stx-map expr #'(e^ ...)) ...)]
        [(let-values ([(id ...) e] ...)
           b^ ... b)
         `(let-values ,stx ([(,(stx-map syntax->list #'((id ...) ...)) ...)
-                            ,(stx-map (expr phase) #'(e ...))] ...)
-           ,(stx-map (expr phase) #'(b^ ...)) ...
-           ,((expr phase) #'b))]
+                            ,(stx-map expr #'(e ...))] ...)
+           ,(stx-map expr #'(b^ ...)) ...
+           ,(expr #'b))]
        [(letrec-values ([(id ...) e] ...)
           b^ ... b)
         `(letrec-values ,stx ([(,(stx-map syntax->list #'((id ...) ...)) ...)
-                               ,(stx-map (expr phase) #'(e ...))] ...)
-           ,(stx-map (expr phase) #'(b^ ...)) ...
-           ,((expr phase) #'b))]
+                               ,(stx-map expr #'(e ...))] ...)
+           ,(stx-map expr #'(b^ ...)) ...
+           ,(expr #'b))]
        [(set! id e)
-        `(set! ,stx ,#'id ,((expr phase) #'e))]
+        `(set! ,stx ,#'id ,(expr #'e))]
        [(quote d)
         `(quote ,stx ,#'d)]
        [(quote-syntax d)
@@ -320,11 +339,11 @@
        [(quote-syntax d #:local)
         `(quote-syntax-local ,stx ,#'d)]
        [(with-continuation-mark e0 e1 e2)
-        `(with-continuation-mark ,stx ,((expr phase) #'e0)
-           ,((expr phase) #'e1) ,((expr phase) #'e2))]
+        `(with-continuation-mark ,stx ,(expr #'e0)
+           ,(expr #'e1) ,(expr #'e2))]
        [(#%plain-app e^ e ...)
-        `(#%plain-app ,stx ,((expr phase) #'e^)
-                      ,(stx-map (expr phase) #'(e ...)) ...)]
+        `(#%plain-app ,stx ,(expr #'e^)
+                      ,(stx-map expr #'(e ...)) ...)]
        [(#%top . id)
         `(#%top ,stx ,#'id)]
        [(#%variable-reference id)
@@ -333,10 +352,11 @@
         `(#%variable-reference-top ,stx ,#'id)]
        [(#%variable-reference)
         `(#%variable-reference-null ,stx)])))
-  (case start
-    [(top-level-form)
-     ((top-level-form phase) stx)]
-    [(module-level-form)
-     ((module-level-form phase) stx)]
-    [(expr)
-     ((expr phase) stx)]))
+  (with-implicit ([phase base-phase])
+    (case start
+      [(top-level-form)
+       (top-level-form stx)]
+      [(module-level-form)
+       (module-level-form stx)]
+      [(expr)
+       (expr stx)])))
