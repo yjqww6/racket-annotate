@@ -156,7 +156,7 @@
 
     (ModuleBeginForm
      : ModuleBeginForm (prog phase) -> * (ss)
-     [(#%plain-module-begin ,s ,[ml*] ...)
+     [(#%plain-module-begin ,s ,[ml* 0 -> ml*] ...)
       (let ([phase 0])
         (d->s s `(,(lit #%plain-module-begin) . ,ml*)))])
 
