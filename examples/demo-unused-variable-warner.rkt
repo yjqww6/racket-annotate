@@ -34,7 +34,7 @@
     
     (define-pass mark-unused-variable : (FullyExpandedProgram ModuleBeginForm) (prog) -> (FullyExpandedProgram ModuleBeginForm) ()
       (ModuleBeginForm : ModuleBeginForm (prog phase) -> ModuleBeginForm ()
-                       [(#%plain-module-begin ,s ,[ml* 0 -> ml*] ... ,[ml 0 -> ml])
+                       [(#%plain-module-begin ,s ,[ml* 0 -> ml*] ...)
                         prog])
       (Expr : Expr (prog phase) -> Expr ()
             [,x 
