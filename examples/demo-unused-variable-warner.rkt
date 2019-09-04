@@ -13,11 +13,13 @@
     (define used-variables (make-hasheqv))
     
     (define (mark-defined! idt phase)
-      (unless (hash-ref defined-variables phase #f)
-        (hash-set! defined-variables phase (mutable-free-id-set #:phase phase)))
-      (free-id-set-add! (hash-ref defined-variables phase)
-                        idt)
-      )
+      (unless (and (eq? '_ (syntax-e idt))
+                   (syntax-original? (syntax-local-introduce idt)))
+        (unless (hash-ref defined-variables phase #f)
+          (hash-set! defined-variables phase (mutable-free-id-set #:phase phase)))
+        (free-id-set-add! (hash-ref defined-variables phase)
+                          idt)
+        ))
     (define (mark-used! idt phase)
       (unless (hash-ref used-variables phase #f)
         (hash-set! used-variables phase (mutable-free-id-set #:phase phase)))
@@ -26,14 +28,15 @@
     
     (define (collect-ids! ids phase)
       (syntax-case ids ()
+        [a (identifier? #'a) (mark-defined! #'a phase)]
         [() (void)]
         [(a . b) (mark-defined! #'a phase)
                  (collect-ids! #'b phase)]
-        [(a) (mark-defined! #'a phase)]))
+        ))
     
     (define-pass mark-unused-variable : (FullyExpandedProgram ModuleBeginForm) (prog) -> (FullyExpandedProgram ModuleBeginForm) ()
       (ModuleBeginForm : ModuleBeginForm (prog phase) -> ModuleBeginForm ()
-                       [(#%plain-module-begin ,s ,[ml*] ... ,[ml])
+                       [(#%plain-module-begin ,s ,[ml* 0 -> ml*] ... ,[ml 0 -> ml])
                         prog])
       (Expr : Expr (prog phase) -> Expr ()
             [,x 
@@ -65,10 +68,10 @@
              prog]
             )
       (GeneralTopLevelForm : GeneralTopLevelForm (prog phase) -> GeneralTopLevelForm ()
-                           [(define-values ,s (,x ...) ,[e])
-                            (collect-ids! x phase)
-                            prog
-                            ]
+                           #;[(define-values ,s (,x ...) ,[e])
+                              (collect-ids! x phase)
+                              prog
+                              ] ;;ignore module level definitions
                            [(define-syntaxes ,s (,x ...) ,[e0 (+ phase 1) -> e1])
                             prog]
                            )
@@ -83,28 +86,21 @@
       (ModuleBeginForm prog 0)
       )
     (mark-unused-variable prog)
-    (for ([(ph vars) defined-variables])
-      (define same-phase-used (hash-ref used-variables ph #f))
-      (when same-phase-used (free-id-set-subtract! vars same-phase-used))
+    (define unused-set (apply append (for/list ([(ph vars) defined-variables])
+                                       (define same-phase-used (hash-ref used-variables ph #f))
+                                       (when same-phase-used (free-id-set-subtract! vars same-phase-used))
+                                       (free-id-set->list vars)
+                                       )))
 
-      (for ([(ph1 vars1) used-variables]
-            #:unless (= ph1 ph))
-        (for* ([v vars]
-               [v1 vars1])
-          (when (free-identifier=? v v1 ph ph1)
-            (free-id-set-remove! vars v))))
-      (define unused-sets (filter
-                           (λ (x)
-                             (not (and (eq? '_ (syntax-e x))
-                                       (syntax-original? (syntax-local-introduce x)))))
-                           (free-id-set->list vars)))
-      (unless (null? unused-sets)
-        (error (format "Unused Variables defined at phase ~a : ~a \n"
-                       ph unused-sets)))
-      )
-    
+    (unless (null? unused-set)
+      (raise-syntax-error 'unused-variable-warner
+                          "warning : unused variables"
+                          #f
+                          #f
+                          unused-set))
     prog
+    
     )
   )
 
-(define/provide-module-begin* demo)
+  (define/provide-module-begin* demo)
