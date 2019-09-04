@@ -68,6 +68,68 @@
   )
 
 (define/contract
+  (FullyExpandedProgram-orig-stx prog)
+  (-> FullyExpandedProgram? syntax?)
+
+  (define (f prog)
+    (cond
+      [(FullyExpandedProgram-Expr? prog)
+       (nanopass-case
+        (FullyExpandedProgram Expr) prog
+        [,x x]
+        [(#%expression ,s ,e) s]
+        [(#%plain-lambda ,s ,fml ,body* ... ,body) s]
+        [(case-lambda ,s [,fml ,body* ... ,body] ...) s]
+        [(if ,s ,e0 ,e1 ,e2) s]
+        [(begin ,s ,body* ... ,body) s]
+        [(begin0 ,s ,body ,body* ...) s]
+        [(let-values ,s ([(,x* ...) ,e] ...) ,body* ... ,body) s]
+        [(letrec-values ,s ([(,x* ...) ,e] ...) ,body* ... ,body) s]
+        [(set! ,s ,x ,e) s]
+        [(quote ,s ,d) s]
+        [(quote-syntax ,s ,d) s]
+        [(quote-syntax-local ,s ,d) s]
+        [(with-continuation-mark ,s ,e0 ,e1 ,e2) s]
+        [(#%plain-app ,s ,e ,e* ...) s]
+        [(#%top ,s ,x) s]
+        [(#%variable-reference ,s ,x) s]
+        [(#%variable-reference-top ,s ,x) s]
+        [(#%variable-reference-null ,s) s])]
+      [(FullyExpandedProgram-GeneralTopLevelForm? prog)
+       (nanopass-case
+        (FullyExpandedProgram GeneralTopLevelForm) prog
+        [,e (f e)]
+        [(define-values ,s (,x* ...) ,e) s]
+        [(define-syntaxes ,s (,x* ...) ,e) s]
+        [(#%require ,s ,d) s])]
+      [(FullyExpandedProgram-ModuleBeginForm? prog)
+       (nanopass-case
+        (FullyExpandedProgram ModuleBeginForm) prog
+        [(#%plain-module-begin ,s ,ml* ...) s])]
+      [(FullyExpandedProgram-SubModuleForm? prog)
+       (nanopass-case
+        (FullyExpandedProgram SubModuleForm) prog
+        [(module ,s ,id ,d ,mbf) s]
+        [(module* ,s ,id ,d ,mbf) s])]
+      [(FullyExpandedProgram-ModuleLevelForm? prog)
+       (nanopass-case
+        (FullyExpandedProgram ModuleLevelForm) prog
+        [,gtl (f gtl)]
+        [(#%provide ,s ,d) s]
+        [(begin-for-syntax ,s ,ml* ...) s]
+        [,sm (f sm)]
+        [(#%declare ,s ,d) s])]
+      [(FullyExpandedProgram-TopLevelForm? prog)
+       (nanopass-case
+        (FullyExpandedProgram TopLevelForm) prog
+        [,gtl (f gtl)]
+        [(tl:#%expression ,s ,e) s]
+        [(tl:module ,s ,id ,d ,mbf) s]
+        [(tl:begin ,s ,tl* ...) s]
+        [(tl:begin-for-syntax ,s ,tl* ...) s])]))
+    (f prog))
+
+(define/contract
   (FullyExpandedProgram->syntax
    prog [start 'top-level-form] [base-phase (syntax-local-phase-level)])
   (->* (FullyExpandedProgram?)
