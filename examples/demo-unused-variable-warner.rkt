@@ -18,8 +18,7 @@
         (unless (hash-ref defined-variables phase #f)
           (hash-set! defined-variables phase (mutable-free-id-set #:phase phase)))
         (free-id-set-add! (hash-ref defined-variables phase)
-                          idt)
-        ))
+                          idt)))
     (define (mark-used! idt phase)
       (unless (hash-ref used-variables phase #f)
         (hash-set! used-variables phase (mutable-free-id-set #:phase phase)))
@@ -31,8 +30,7 @@
         [a (identifier? #'a) (mark-defined! #'a phase)]
         [() (void)]
         [(a . b) (mark-defined! #'a phase)
-                 (collect-ids! #'b phase)]
-        ))
+                 (collect-ids! #'b phase)]))
     
     (define-pass mark-unused-variable : (FullyExpandedProgram ModuleBeginForm) (prog) -> (FullyExpandedProgram ModuleBeginForm) ()
       (ModuleBeginForm : ModuleBeginForm (prog phase) -> ModuleBeginForm ()
@@ -55,42 +53,38 @@
              (collect-ids! fml phase)
              prog]
             [(case-lambda ,s [,fml ,[body*] ... ,[body]] ...)
-             (for ([f fml])
+             (for ([f (in-list fml)])
                (collect-ids! f phase))
              prog]
             [(let-values ,s ([(,x* ...) ,[e]] ...) ,[body*] ... ,[body])
-             (for ([x x*])
+             (for ([x (in-list x*)])
                (collect-ids! x phase))
              prog]
             [(letrec-values ,s ([(,x* ...) ,[e]] ...) ,[body*] ... ,[body])
-             (for ([x x*])
+             (for ([x (in-list x*)])
                (collect-ids! x phase))
-             prog]
-            )
+             prog])
       (GeneralTopLevelForm : GeneralTopLevelForm (prog phase) -> GeneralTopLevelForm ()
                            #;[(define-values ,s (,x ...) ,[e])
                               (collect-ids! x phase)
                               prog
                               ] ;;ignore module level definitions
                            [(define-syntaxes ,s (,x ...) ,[e0 (+ phase 1) -> e1])
-                            prog]
-                           )
+                            prog])
       (ModuleLevelForm : ModuleLevelForm (prog phase) -> ModuleLevelForm ()
                        [(begin-for-syntax ,s ,[ml* (+ phase 1) -> ml^] ...)
                         prog])
-      (SubModuleForm : SubModuleForm (prog phase) -> SubModuleForm ()
-                     )
-      (TopLevelForm : TopLevelForm (prog phase) -> SubModuleForm ()
-                    )
-                        
-      (ModuleBeginForm prog 0)
-      )
+      (SubModuleForm : SubModuleForm (prog phase) -> SubModuleForm ())
+      (ModuleBeginForm prog 0))
     (mark-unused-variable prog)
-    (define unused-set (apply append (for/list ([(ph vars) defined-variables])
-                                       (define same-phase-used (hash-ref used-variables ph #f))
-                                       (when same-phase-used (free-id-set-subtract! vars same-phase-used))
-                                       (free-id-set->list vars)
-                                       )))
+    (define unused-set (apply append
+                              (for/list
+                                  ([(ph vars) (in-hash defined-variables)])
+                                (define same-phase-used
+                                  (hash-ref used-variables ph #f))
+                                (when same-phase-used
+                                  (free-id-set-subtract! vars same-phase-used))
+                                (free-id-set->list vars))))
 
     (unless (null? unused-set)
       (raise-syntax-error 'unused-variable-warner
@@ -98,9 +92,6 @@
                           #f
                           #f
                           unused-set))
-    prog
-    
-    )
-  )
+    prog))
 
-  (define/provide-module-begin* demo)
+(define/provide-module-begin* demo)
