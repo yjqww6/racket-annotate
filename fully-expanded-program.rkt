@@ -129,9 +129,12 @@
         [(tl:begin-for-syntax ,s ,tl* ...) s])]))
     (f prog))
 
+(define base-phase
+  (variable-reference->module-base-phase (#%variable-reference)))
+
 (define/contract
   (FullyExpandedProgram->syntax
-   prog [start 'top-level-form] [base-phase (syntax-local-phase-level)])
+   prog [start 'top-level-form] [base-phase base-phase])
   (->* (FullyExpandedProgram?)
        ((or/c 'top-level-form 'module-level-form 'expr 'module-begin-form)
         exact-integer?)
